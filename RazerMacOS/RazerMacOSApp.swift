@@ -15,7 +15,7 @@ struct RazerMacOSApp: App {
 
     var body: some Scene {
         WindowGroup(id: "mainWindow") {
-            ContentView()
+            ContentView(manager: sharedManager)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 900, height: 600)

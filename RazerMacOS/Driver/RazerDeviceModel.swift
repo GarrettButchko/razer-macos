@@ -134,12 +134,84 @@ public struct RGBColor: Codable, Equatable, Sendable {
     }
 }
 
+// MARK: - Unified Profile Models
+
+public struct RazerDeviceProfileConfig: Codable, Equatable, Sendable {
+    public var mode: LightingEffectMode
+    public var brightness: Double
+    public var primaryColor: RGBColor
+    public var secondaryColor: RGBColor
+    public var waveDirection: WaveDirection
+    public var effectSpeed: Double
+    public var dpi: Int
+    public var pollingRate: Int
+
+    public init(
+        mode: LightingEffectMode = .staticColor,
+        brightness: Double = 100.0,
+        primaryColor: RGBColor = .razerGreen,
+        secondaryColor: RGBColor = .cyan,
+        waveDirection: WaveDirection = .leftToRight,
+        effectSpeed: Double = 1.0,
+        dpi: Int = 1600,
+        pollingRate: Int = 1000
+    ) {
+        self.mode = mode
+        self.brightness = brightness
+        self.primaryColor = primaryColor
+        self.secondaryColor = secondaryColor
+        self.waveDirection = waveDirection
+        self.effectSpeed = effectSpeed
+        self.dpi = dpi
+        self.pollingRate = pollingRate
+    }
+}
+
+public struct RazerProfile: Identifiable, Codable, Equatable, Sendable {
+    public var id: String
+    public var name: String
+    public var isBuiltIn: Bool
+    public var deviceConfigs: [String: RazerDeviceProfileConfig] // keyed by productId hex or device id
+    public var defaultGlobalConfig: RazerDeviceProfileConfig
+
+    public init(
+        id: String = UUID().uuidString,
+        name: String,
+        isBuiltIn: Bool = false,
+        deviceConfigs: [String: RazerDeviceProfileConfig] = [:],
+        defaultGlobalConfig: RazerDeviceProfileConfig = RazerDeviceProfileConfig()
+    ) {
+        self.id = id
+        self.name = name
+        self.isBuiltIn = isBuiltIn
+        self.deviceConfigs = deviceConfigs
+        self.defaultGlobalConfig = defaultGlobalConfig
+    }
+
+    public static let turnAllOffId = "builtin-turn-all-off"
+
+    public static var turnAllOff: RazerProfile {
+        RazerProfile(
+            id: turnAllOffId,
+            name: "Turn All Off",
+            isBuiltIn: true,
+            defaultGlobalConfig: RazerDeviceProfileConfig(
+                mode: .off,
+                brightness: 0.0
+            )
+        )
+    }
+}
+
+// MARK: - Razer Device Model
+
 @Observable
 public final class RazerDeviceModel: Identifiable {
     public let id: String
     public let productId: UInt16
     public var name: String
     public var type: RazerDeviceType
+    public var imageURL: String?
     public var isConnected: Bool
     public var isSimulated: Bool
 
@@ -175,6 +247,7 @@ public final class RazerDeviceModel: Identifiable {
         productId: UInt16,
         name: String,
         type: RazerDeviceType,
+        imageURL: String? = nil,
         isConnected: Bool = true,
         isSimulated: Bool = false,
         batteryLevel: Int? = nil,
@@ -200,6 +273,7 @@ public final class RazerDeviceModel: Identifiable {
         self.productId = productId
         self.name = name
         self.type = type
+        self.imageURL = imageURL
         self.isConnected = isConnected
         self.isSimulated = isSimulated
         self.batteryLevel = batteryLevel
@@ -229,5 +303,48 @@ public final class RazerDeviceModel: Identifiable {
 
     public var productIdHexString: String {
         String(format: "0x%04X", productId)
+    }
+
+    public var currentSettingDescription: String {
+        if currentMode == .off || brightness == 0 {
+            return "Lighting Off"
+        }
+        var desc = "\(currentMode.rawValue)"
+        if currentMode == .staticColor || currentMode == .breathe {
+            desc += " • \(Int(brightness))%"
+        } else {
+            desc += " • \(Int(brightness))%"
+        }
+        if type == .mouse {
+            desc += " • \(dpi) DPI"
+        }
+        return desc
+    }
+
+    public func snapshotConfig() -> RazerDeviceProfileConfig {
+        RazerDeviceProfileConfig(
+            mode: currentMode,
+            brightness: brightness,
+            primaryColor: primaryColor,
+            secondaryColor: secondaryColor,
+            waveDirection: waveDirection,
+            effectSpeed: effectSpeed,
+            dpi: dpi,
+            pollingRate: pollingRate
+        )
+    }
+
+    public func apply(config: RazerDeviceProfileConfig) {
+        self.currentMode = config.mode
+        if config.mode != .off {
+            self.previousMode = config.mode
+        }
+        self.brightness = config.brightness
+        self.primaryColor = config.primaryColor
+        self.secondaryColor = config.secondaryColor
+        self.waveDirection = config.waveDirection
+        self.effectSpeed = config.effectSpeed
+        self.dpi = min(maxDpi, max(100, config.dpi))
+        self.pollingRate = config.pollingRate
     }
 }
